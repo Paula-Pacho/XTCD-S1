@@ -38,7 +38,7 @@ function configura() {
   r.setFrozenRows(1);
   let e = ss.getSheetByName(FULL_E) || ss.insertSheet(FULL_E);
   e.clear();
-  e.getRange(1, 1, 3, 2).setValues([["q", 0], ["obert", false], ["actualitzat", new Date()]]);
+  e.getRange(1, 1, 4, 2).setValues([["q", 0], ["obert", false], ["actualitzat", new Date()], ["resum_public", false]]);
   let s = ss.getSheetByName(FULL_S) || ss.insertSheet(FULL_S);
   s.clear();
   s.getRange(1, 1, 1, 3).setValues([["Pregunta", "Opció", "Respostes"]]);
@@ -56,8 +56,8 @@ function configura() {
 function columnLetter(n) { let s = ""; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
 function json(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
 function estat() {
-  const v = SpreadsheetApp.getActive().getSheetByName(FULL_E).getRange(1, 1, 2, 2).getValues();
-  return { q: Number(v[0][1]) || 0, obert: v[1][1] === true || v[1][1] === "TRUE" };
+  const v = SpreadsheetApp.getActive().getSheetByName(FULL_E).getRange(1, 1, 4, 2).getValues();
+  return { q: Number(v[0][1]) || 0, obert: v[1][1] === true || v[1][1] === "TRUE", resum: v[3][1] === true || v[3][1] === "TRUE" };
 }
 function net(t, n) { t = String(t == null ? "" : t).trim().slice(0, n); return /^[=+\-@]/.test(t) ? "'" + t : t; }
 
@@ -76,6 +76,16 @@ function doGet(e) {
       return { id: r[0], nom: r[1], centre: r[2], actualitzat: String(r[3]), respostes: a, comentaris: c };
     });
     return json({ estat: estat(), persones: out });
+  }
+  if (p.accio === "resum") {
+    // Resum anònim: només recomptes. Sense noms, centres ni comentaris.
+    if (!estat().resum) return json({ error: "no_public" });
+    const sh = SpreadsheetApp.getActive().getSheetByName(FULL_R);
+    const n = sh.getLastRow() - 1;
+    const rows = n > 0 ? sh.getRange(2, 5, n, QS.length).getValues() : [];
+    const counts = QS.map((ops, qi) => ops.map(o => rows.filter(r => r[qi] === o).length));
+    const persones = rows.filter(r => r.some(c => c !== "")).length;
+    return json({ counts, persones });
   }
   return json({ estat: estat() });
 }
@@ -106,6 +116,10 @@ function doPost(e) {
     if (d.accio === "estat") {
       const q = Math.max(0, Math.min(QS.length - 1, Number(d.q) || 0));
       ss.getSheetByName(FULL_E).getRange(1, 2, 3, 1).setValues([[q], [!!d.obert], [new Date()]]);
+      return json({ ok: true, estat: estat() });
+    }
+    if (d.accio === "resum") {
+      ss.getSheetByName(FULL_E).getRange(4, 1, 1, 2).setValues([["resum_public", !!d.public]]);
       return json({ ok: true, estat: estat() });
     }
     if (d.accio === "esborra") {

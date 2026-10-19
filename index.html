@@ -47,6 +47,7 @@ input[type=text]{width:100%;font:inherit;padding:10px;border-radius:10px;border:
 .err{background:#fde8e8;color:#7a1f1f;padding:10px 14px;border-radius:10px;margin:10px 0}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .err{background:#3b1d1d;color:#f5c2c2}}
 .hidden{display:none!important}
+@media print{.top,#bar,button{display:none!important}body{background:#fff}}
 input.k{max-width:260px;display:inline-block;margin-right:8px}
 textarea{width:100%;font:inherit;padding:10px;border-radius:10px;border:1px solid var(--mid);background:var(--card);color:var(--ink);resize:vertical}
 </style>
@@ -87,6 +88,9 @@ const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=
 const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 const ss={get(k){try{return sessionStorage.getItem(k)}catch(e){return null}},set(k,v){try{sessionStorage.setItem(k,v)}catch(e){}}};
 let pres=location.hash==="#presenta";
+let resumMode=location.hash==="#resum";
+let showResum=false;
+let publicResum=null;
 let clau=ss.get("clau")||"";
 let uid=ls.get("uid");if(!uid){uid="p"+Math.random().toString(36).slice(2,10)+Date.now().toString(36);ls.set("uid",uid)}
 let state={q:0,obert:false};
@@ -101,6 +105,7 @@ function configured(){return API&&!API.startsWith("PASTE")}
 
 async function poll(){
  if(!configured())return;
+ if(resumMode){try{const d=await get({accio:"resum"});publicResum=d;msg("")}catch(e){msg("No hi ha connexió amb el servidor.")}render();return}
  try{
   if(pres&&clau){const d=await get({accio:"resultats",clau});
    if(d.error==="clau"){msg("Clau incorrecta.");clau="";ss.set("clau","");}
@@ -117,6 +122,7 @@ function render(){
  const bar=$("#bar");bar.textContent="";
  const app=$("#app");app.textContent="";
  if(!configured()){app.appendChild(el("div","card","Falta configurar l'URL del servidor (variable API a index.html). Mira el README."));return}
+ if(resumMode)return renderResumPublic(app);
  if(pres){
   const b=el("button","","Vista de participant");b.onclick=()=>{location.hash="";pres=false;render()};bar.appendChild(b);
   if(!clau)return renderClau(app);
@@ -131,6 +137,7 @@ function renderClau(app){
  const p=el("p","");p.append(i,b);c.appendChild(p);app.appendChild(c);
 }
 function renderPres(app){
+ if(showResum)return renderResumPres(app);
  const q=QS[state.q];const {c,who}=counts(state.q);const tot=c.reduce((a,b)=>a+b,0);
  const card=el("div","card");
  card.appendChild(el("div","eyebrow","Pregunta "+(state.q+1)+" de "+QS.length));
@@ -148,15 +155,14 @@ function renderPres(app){
   const dots=el("div","dots");for(let k=0;k<c[i];k++)dots.appendChild(el("span","dot"));
   d.appendChild(dots);z.appendChild(d)});
  card.appendChild(z);
- const cms=persones.filter(p=>p.comentaris&&p.comentaris["q"+state.q]);
- if(cms.length){const cb=el("div","");cb.style.marginTop="16px";cb.appendChild(el("strong","","Comentaris ("+cms.length+")"));
-  cms.forEach(p=>{const li=el("p","note",(p.nom?p.nom+(p.centre?" ("+p.centre+")":"")+": ":"")+p.comentaris["q"+state.q]);li.style.margin="6px 0";cb.appendChild(li)});
-  card.appendChild(cb)}
  const ctl=el("div","bar");ctl.style.marginTop="16px";
  const prev=el("button","","← Anterior");prev.disabled=state.q===0;prev.onclick=()=>setEstat(state.q-1,true);
  const tog=el("button","pri",state.obert?"Tanca la votació":"Obre la votació");tog.onclick=()=>setEstat(state.q,!state.obert);
  const next=el("button","",state.q===QS.length-1?"Última pregunta":"Següent →");next.disabled=state.q===QS.length-1;next.onclick=()=>setEstat(state.q+1,true);
- ctl.append(prev,tog,next);card.appendChild(ctl);app.appendChild(card);
+ ctl.append(prev,tog,next);card.appendChild(ctl);
+ const nav=el("div","bar");nav.style.marginTop="10px";nav.appendChild(el("span","note","Ves a la pregunta:"));
+ QS.forEach((_,i)=>{const nb=el("button",i===state.q?"pri":"",String(i+1));nb.style.minWidth="42px";nb.setAttribute("aria-label","Pregunta "+(i+1));nb.onclick=()=>{if(i!==state.q)setEstat(i,true)};nav.appendChild(nb)});
+ card.appendChild(nav);app.appendChild(card);
  const reg=el("div","card");reg.style.marginTop="14px";
  reg.appendChild(el("strong","","Registre de respostes"));
  reg.appendChild(el("p","note","Les respostes es desen al full de càlcul vinculat (pestanyes Respostes i Resum). També les pots descarregar aquí."));
@@ -166,10 +172,53 @@ function renderPres(app){
  const e3=el("button","","Esborra totes les respostes");
  e3.onclick=()=>{if(e3.dataset.sure!=="1"){e3.dataset.sure="1";e3.textContent="Segur? Torna a clicar per esborrar";setTimeout(()=>{e3.dataset.sure="";e3.textContent="Esborra totes les respostes"},4000);return}
   post({accio:"esborra",clau}).then(poll).catch(()=>msg("No s'ha pogut esborrar."))};
- rb.append(e1,e2,e3);reg.appendChild(rb);app.appendChild(reg);
+ const e4=el("button","pri","Resum final");e4.onclick=()=>{showResum=true;render()};
+ rb.append(e4,e1,e2,e3);reg.appendChild(rb);app.appendChild(reg);
 }
-async function setEstat(q,obert){state={q,obert};render();
+async function setEstat(q,obert){state=Object.assign({},state,{q,obert});render();
  try{const d=await post({accio:"estat",clau,q,obert});if(d.error)msg("No s'ha pogut canviar l'estat ("+d.error+").")}catch(e){msg("No s'ha pogut canviar l'estat.")}}
+function summaryCard(app,counts,n){
+ const card=el("div","card");
+ card.appendChild(el("div","eyebrow","xTCD Alt Penedès"));
+ card.appendChild(el("h1","","Resum final"));
+ card.appendChild(el("p","hint","Respostes anònimes de "+n+" persones. No inclou noms, centres ni comentaris."));
+ QS.forEach((q,qi)=>{
+  const c=counts[qi]||[];const tot=c.reduce((a,b)=>a+b,0);
+  const blk=el("div","");blk.style.margin="18px 0";
+  blk.appendChild(el("strong","",(qi+1)+". "+q.t));
+  q.o.forEach((lab,i)=>{
+   const v=c[i]||0;const pct=tot?Math.round(100*v/tot):0;
+   const row=el("div","");row.style.cssText="display:grid;grid-template-columns:minmax(120px,40%) 1fr 64px;gap:8px;align-items:center;margin:6px 0";
+   row.appendChild(el("span","",lab));
+   const track=el("div","");track.style.cssText="background:var(--light);border-radius:8px;height:22px;overflow:hidden";
+   const fill=el("div","");fill.style.cssText="height:100%;border-radius:8px;width:"+pct+"%;background:"+COLORS[i%COLORS.length];
+   track.appendChild(fill);row.appendChild(track);
+   row.appendChild(el("span","note",v+" ("+pct+" %)"));
+   blk.appendChild(row)});
+  card.appendChild(blk)});
+ app.appendChild(card);
+}
+function renderResumPublic(app){
+ if(!publicResum){app.appendChild(el("div","card","Carregant el resum…"));return}
+ if(publicResum.error){app.appendChild(el("div","card","El resum encara no s'ha publicat. Torna-ho a provar més tard."));return}
+ summaryCard(app,publicResum.counts,publicResum.persones);
+}
+function renderResumPres(app){
+ const bar=el("div","bar");bar.style.marginBottom="12px";
+ const back=el("button","","← Torna a les preguntes");back.onclick=()=>{showResum=false;render()};
+ const pub=el("button","pri",state.resum?"Deixa de compartir el resum":"Publica el resum per compartir-lo");
+ pub.onclick=async()=>{try{const d=await post({accio:"resum",clau,public:!state.resum});if(d.error)msg("No s'ha pogut canviar ("+d.error+").");else{state=Object.assign({},state,{resum:d.estat.resum});msg("")}}catch(e){msg("No s'ha pogut canviar.")}render()};
+ bar.append(back,pub);
+ const link=location.origin+location.pathname+"#resum";
+ if(state.resum){
+  const cp=el("button","","Copia l'enllaç");cp.onclick=async()=>{try{await navigator.clipboard.writeText(link);cp.textContent="Copiat"}catch(e){cp.textContent=link}};
+  bar.appendChild(cp)}
+ const pr=el("button","","Imprimeix / desa com a PDF");pr.onclick=()=>window.print();bar.appendChild(pr);
+ app.appendChild(bar);
+ if(state.resum){const t=el("p","note","Enllaç públic del resum anònim: "+link);app.appendChild(t)}
+ else app.appendChild(el("p","note","El resum només és visible per a tu fins que el publiquis."));
+ summaryCard(app,QS.map((_,i)=>counts(i).c),persones.length);
+}
 function renderPart(app){
  const card=el("div","card");const q=QS[state.q];
  card.appendChild(el("div","eyebrow","Pregunta "+(state.q+1)+" de "+QS.length));
@@ -209,7 +258,7 @@ function csv(summary){
  const blob=new Blob(["﻿"+rows.map(r=>r.map(cell).join(";")).join("\n")],{type:"text/csv;charset=utf-8"});
  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=summary?"xtcd_resum.csv":"xtcd_registre.csv";document.body.appendChild(a);a.click();a.remove();
 }
-window.addEventListener("hashchange",()=>{pres=location.hash==="#presenta";render();poll()});
+window.addEventListener("hashchange",()=>{pres=location.hash==="#presenta";resumMode=location.hash==="#resum";publicResum=null;render();poll()});
 render();poll();setInterval(poll,POLL_MS);
 </script>
 </body>
