@@ -48,6 +48,7 @@ input[type=text]{width:100%;font:inherit;padding:10px;border-radius:10px;border:
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .err{background:#3b1d1d;color:#f5c2c2}}
 .hidden{display:none!important}
 input.k{max-width:260px;display:inline-block;margin-right:8px}
+textarea{width:100%;font:inherit;padding:10px;border-radius:10px;border:1px solid var(--mid);background:var(--card);color:var(--ink);resize:vertical}
 </style>
 </head>
 <body>
@@ -68,18 +69,18 @@ const POLL_MS = 2500;
 /* ========================== */
 const COLORS=["var(--c0)","var(--c1)","var(--c2)","var(--c3)","var(--c4)"];
 const QS=[
- {t:"Quina és la tipologia del vostre centre?",o:["Primària","Secundària","Primària i secundària","Altres"]},
- {t:"Quants anys fa que sou coordinadors/es digitals?",o:["Aquest és el primer","2 o 3 anys","De 4 a 6 anys","Més de 6 anys"]},
- {t:"Coneixeu l'EDC del vostre centre? Està vigent?",o:["Sí, està vigent","Està vençuda","No ho sé"]},
+ {t:"Quina és la tipologia del vostre centre?",o:["Primària","Secundària","Primària i secundària"]},
+ {t:"Quants cursos fa que sou coordinadors/es digitals?",o:["Aquest és el primer","2 o 3 anys","De 4 a 6 anys","Més de 6 anys"]},
+ {t:"Coneixeu l'EDC del vostre centre? Està vigent?",o:["No, no sé a quin document et refereixes","Sí, conec el document. No sé si està vigent.","Sí, està vigent","Sí, està vençuda"]},
  {t:"Quan caduca l'EDC del vostre centre?",o:["26-27","27-28","28-29","29-30","No ho sé"]},
- {t:"Teniu comissió digital formada?",o:["Sí, i funciona","Formada, però gairebé no actua","En procés de formar-la","No"]},
- {t:"Cada quant es reuneix la comissió digital?",o:["Cada mes o més","Cada trimestre","Una o dues vegades l'any","Mai / no tenim comissió"]},
- {t:"Sabeu quins són els objectius de l'EDC planificats per a enguany?",o:["Sí, els conec","Els conec en part","No els conec"]},
+ {t:"Teniu comissió digital formada?",o:["Sí, i funciona","Formada, però gairebé no ens trobem","En procés de formació","No, encara no s'ha definit","No, som un claustre molt petit"]},
+ {t:"Amb quina freqüència es reuneix la comissió digital?",o:["Quinzenal","Mensual","Una o dues vegades l'any","Mai / no tenim comissió"]},
+ {t:"Sabeu quins són els objectius de l'EDC planificats per a enguany?",o:["Sí, els conec","Alguna cosa recordo del curs passat","No els conec"]},
  {t:"Els objectius de l'EDC apareixen a la PGA?",o:["Sí","No","No ho sé"]},
- {t:"El Nodes del centre s'ha actualitzat a la versió 2.0?",o:["Sí","Encara no","No ho sé"]},
- {t:"Qui s'encarrega del manteniment del Nodes?",o:["Coordinació digital","Equip directiu","Altra persona o empresa","No ho sé"]},
+ {t:"El Nodes del centre s'ha actualitzat a la versió 2.0?",o:["Sí","Encara no","No ho sé","El centre fa servir un domini web propi"]},
+ {t:"Qui s'encarrega del manteniment del Nodes?",o:["Coordinació digital","Equip directiu","Altra persona o empresa","No ho sé","No està definit"]},
  {t:"L'EDC actualitzada és a l'apartat «Documents de centre» del Nodes?",o:["Sí, actualitzada","Sí, però és una versió antiga","No hi és","No ho sé"]},
- {t:"Coneixeu el programa Robots en Acció?",o:["Hi participem","Sí, però no hi participem","N'he sentit parlar","No el conec"]}
+ {t:"Coneixeu el programa Robots en Acció?",o:["Sí, hi participem","Sí, però no hi participem","N'he sentit parlar","No el conec"]}
 ];
 const $=s=>document.querySelector(s);
 const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e};
@@ -89,7 +90,7 @@ let pres=location.hash==="#presenta";
 let clau=ss.get("clau")||"";
 let uid=ls.get("uid");if(!uid){uid="p"+Math.random().toString(36).slice(2,10)+Date.now().toString(36);ls.set("uid",uid)}
 let state={q:0,obert:false};
-let mine={name:ls.get("nom")||"",centre:ls.get("centre")||"",answers:JSON.parse(ls.get("resp")||"{}")};
+let mine={name:ls.get("nom")||"",centre:ls.get("centre")||"",answers:JSON.parse(ls.get("resp")||"{}"),comments:JSON.parse(ls.get("com")||"{}")};
 let persones=[];
 let busy=false;
 
@@ -112,7 +113,7 @@ function counts(q){const n=QS[q].o.length;const c=Array(n).fill(0);const who=Arr
  persones.forEach(p=>{const a=p.respostes["q"+q];if(a!=null&&a<n){c[a]++;if(p.nom)who[a].push(p.nom+(p.centre?" ("+p.centre+")":""))}});return {c,who}}
 
 function render(){
- if(document.activeElement&&document.activeElement.tagName==="INPUT")return;
+ if(document.activeElement&&/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName))return;
  const bar=$("#bar");bar.textContent="";
  const app=$("#app");app.textContent="";
  if(!configured()){app.appendChild(el("div","card","Falta configurar l'URL del servidor (variable API a index.html). Mira el README."));return}
@@ -147,6 +148,10 @@ function renderPres(app){
   const dots=el("div","dots");for(let k=0;k<c[i];k++)dots.appendChild(el("span","dot"));
   d.appendChild(dots);z.appendChild(d)});
  card.appendChild(z);
+ const cms=persones.filter(p=>p.comentaris&&p.comentaris["q"+state.q]);
+ if(cms.length){const cb=el("div","");cb.style.marginTop="16px";cb.appendChild(el("strong","","Comentaris ("+cms.length+")"));
+  cms.forEach(p=>{const li=el("p","note",(p.nom?p.nom+(p.centre?" ("+p.centre+")":"")+": ":"")+p.comentaris["q"+state.q]);li.style.margin="6px 0";cb.appendChild(li)});
+  card.appendChild(cb)}
  const ctl=el("div","bar");ctl.style.marginTop="16px";
  const prev=el("button","","← Anterior");prev.disabled=state.q===0;prev.onclick=()=>setEstat(state.q-1,true);
  const tog=el("button","pri",state.obert?"Tanca la votació":"Obre la votació");tog.onclick=()=>setEstat(state.q,!state.obert);
@@ -173,6 +178,12 @@ function renderPart(app){
  const cur=mine.answers["q"+state.q];
  q.o.forEach((lab,i)=>{const b=el("button","opt"+(cur===i?" sel":""),lab);b.style.background=COLORS[i%COLORS.length];
   b.disabled=!state.obert;b.onclick=()=>answer(i);card.appendChild(b)});
+ const lc=el("label","","Vols afegir un comentari? (opcional)");
+ const ta=el("textarea");ta.maxLength=500;ta.rows=3;ta.value=mine.comments["q"+state.q]||"";ta.placeholder="Qualsevol cosa que creguis convenient sobre aquesta pregunta";
+ let tc=null;const qn=state.q;
+ ta.oninput=()=>{mine.comments["q"+qn]=ta.value;ls.set("com",JSON.stringify(mine.comments));clearTimeout(tc);tc=setTimeout(()=>{
+  post({accio:"comentari",id:uid,nom:mine.name,centre:mine.centre,q:qn,text:ta.value.trim()}).then(d=>{if(d.error==="pregunta")msg("No s'ha pogut desar el comentari: s'ha canviat de pregunta.")}).catch(()=>msg("No s'ha pogut desar el comentari."))},1000)};
+ card.append(lc,ta);
  app.appendChild(card);
  const id=el("div","card");id.style.marginTop="14px";
  id.appendChild(el("strong","","Qui ets? (opcional)"));
@@ -193,8 +204,8 @@ function cell(v){v=String(v==null?"":v);return /[";\n]/.test(v)?'"'+v.replace(/"
 function csv(summary){
  const rows=[];
  if(summary){rows.push(["Pregunta","Opció","Respostes"]);QS.forEach((q,qi)=>{const {c}=counts(qi);q.o.forEach((o,i)=>rows.push([q.t,o,c[i]]))})}
- else{rows.push(["Nom","Centre","Actualitzat",...QS.map((q,i)=>(i+1)+". "+q.t)]);
-  persones.forEach(p=>rows.push([p.nom||"(anònim)",p.centre||"",p.actualitzat||"",...QS.map((q,i)=>{const a=p.respostes["q"+i];return a!=null?q.o[a]:""})]))}
+ else{rows.push(["Nom","Centre","Actualitzat",...QS.map((q,i)=>(i+1)+". "+q.t),...QS.map((q,i)=>"Comentari "+(i+1))]);
+  persones.forEach(p=>rows.push([p.nom||"(anònim)",p.centre||"",p.actualitzat||"",...QS.map((q,i)=>{const a=p.respostes["q"+i];return a!=null?q.o[a]:""}),...QS.map((q,i)=>(p.comentaris&&p.comentaris["q"+i])||"")]))}
  const blob=new Blob(["﻿"+rows.map(r=>r.map(cell).join(";")).join("\n")],{type:"text/csv;charset=utf-8"});
  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=summary?"xtcd_resum.csv":"xtcd_registre.csv";document.body.appendChild(a);a.click();a.remove();
 }
