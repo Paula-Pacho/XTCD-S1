@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Terra, mar i aire digital</title>
+<style>
+:root{--bg:#f6f9fa;--card:#fff;--ink:#1f2937;--mute:#6b7280;--teal:#1F6F8B;--orange:#E8871E;--light:#EEF4F7;--mid:#C9D6DC;
+--c0:#F2C230;--c1:#4C7DF0;--c2:#7A4BB5;--c3:#3AA655;--c4:#E8871E;--onc:#1f2937}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10181c;--card:#18232a;--ink:#e8eef1;--mute:#9aa8b0;--teal:#6FB1C6;--light:#1d2b33;--mid:#2f414b;--onc:#10181c}}
+:root[data-theme="dark"]{--bg:#10181c;--card:#18232a;--ink:#e8eef1;--mute:#9aa8b0;--teal:#6FB1C6;--light:#1d2b33;--mid:#2f414b;--onc:#10181c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.4;
+padding:16px max(16px,env(safe-area-inset-right)) 32px max(16px,env(safe-area-inset-left))}
+.wrap{max-width:1200px;margin:0 auto}
+.top{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:14px}
+.brand{font-weight:700;color:var(--teal);letter-spacing:.02em}
+.brand small{display:block;font-weight:500;color:var(--mute);letter-spacing:0}
+button{font:inherit;cursor:pointer;border:0;border-radius:10px;padding:10px 14px;background:var(--light);color:var(--ink)}
+button:hover{filter:brightness(.97)}
+button.pri{background:var(--teal);color:#fff}
+button:disabled{opacity:.5;cursor:default}
+.bar{display:flex;flex-wrap:wrap;gap:8px}
+.card{background:var(--card);border-radius:16px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.eyebrow{color:var(--orange);font-weight:700;font-size:.85rem;letter-spacing:.06em;text-transform:uppercase}
+h1{margin:4px 0 4px;font-size:clamp(1.4rem,4vw,2.4rem);color:var(--teal);line-height:1.15}
+.hint{color:var(--mute);margin:0 0 14px}
+.zones{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));margin-top:12px}
+.zone{border-radius:16px;padding:14px;color:var(--onc);min-height:220px;display:flex;flex-direction:column;gap:8px}
+.zone .lab{font-weight:700;font-size:clamp(1rem,2vw,1.35rem)}
+.zone .n{font-size:clamp(2.4rem,6vw,4.5rem);font-weight:800;line-height:1}
+.zone .pct{font-weight:600;opacity:.8}
+.dots{display:flex;flex-wrap:wrap;gap:5px;margin-top:auto}
+.dot{width:14px;height:14px;border-radius:50%;background:rgba(31,41,55,.55);animation:pop .35s ease-out}
+.names{font-size:.85rem;opacity:.9}
+@keyframes pop{from{transform:scale(0)}to{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.dot{animation:none}}
+.opt{display:block;width:100%;text-align:left;margin:10px 0;padding:18px;font-size:1.1rem;font-weight:600;border-radius:14px;color:var(--onc);border:4px solid transparent}
+.opt.sel{border-color:var(--ink);box-shadow:0 0 0 3px var(--card) inset}
+.status{display:flex;flex-wrap:wrap;gap:12px;align-items:center;color:var(--mute);margin-top:10px}
+.pill{padding:4px 10px;border-radius:99px;background:var(--light);font-weight:600;color:var(--ink)}
+.pill.on{background:var(--c3);color:#10181c}
+.pill.off{background:var(--orange);color:#10181c}
+label{display:block;font-weight:600;margin:10px 0 4px}
+input[type=text]{width:100%;font:inherit;padding:10px;border-radius:10px;border:1px solid var(--mid);background:var(--card);color:var(--ink)}
+.note{color:var(--mute);font-size:.9rem}
+.err{background:#fde8e8;color:#7a1f1f;padding:10px 14px;border-radius:10px;margin:10px 0}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .err{background:#3b1d1d;color:#f5c2c2}}
+.hidden{display:none!important}
+input.k{max-width:260px;display:inline-block;margin-right:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">xTCD Alt Penedès<small>Terra, mar i aire digital</small></div>
+    <div class="bar" id="bar"></div>
+  </div>
+  <div id="msg"></div>
+  <div id="app"></div>
+</div>
+<script>
+"use strict";
+/* ====== CONFIGURACIÓ ====== */
+// Enganxa aquí l'URL de l'aplicació web d'Apps Script (acaba en /exec).
+const API = "PASTE_URL_AQUI";
+const POLL_MS = 2500;
+/* ========================== */
+const COLORS=["var(--c0)","var(--c1)","var(--c2)","var(--c3)","var(--c4)"];
+const QS=[
+ {t:"Quina és la tipologia del vostre centre?",o:["Primària","Secundària","Primària i secundària","Altres"]},
+ {t:"Quants anys fa que sou coordinadors/es digitals?",o:["Aquest és el primer","2 o 3 anys","De 4 a 6 anys","Més de 6 anys"]},
+ {t:"Coneixeu l'EDC del vostre centre? Està vigent?",o:["Sí, està vigent","Està vençuda","No ho sé"]},
+ {t:"Quan caduca l'EDC del vostre centre?",o:["26-27","27-28","28-29","29-30","No ho sé"]},
+ {t:"Teniu comissió digital formada?",o:["Sí, i funciona","Formada, però gairebé no actua","En procés de formar-la","No"]},
+ {t:"Cada quant es reuneix la comissió digital?",o:["Cada mes o més","Cada trimestre","Una o dues vegades l'any","Mai / no tenim comissió"]},
+ {t:"Sabeu quins són els objectius de l'EDC planificats per a enguany?",o:["Sí, els conec","Els conec en part","No els conec"]},
+ {t:"Els objectius de l'EDC apareixen a la PGA?",o:["Sí","No","No ho sé"]},
+ {t:"El Nodes del centre s'ha actualitzat a la versió 2.0?",o:["Sí","Encara no","No ho sé"]},
+ {t:"Qui s'encarrega del manteniment del Nodes?",o:["Coordinació digital","Equip directiu","Altra persona o empresa","No ho sé"]},
+ {t:"L'EDC actualitzada és a l'apartat «Documents de centre» del Nodes?",o:["Sí, actualitzada","Sí, però és una versió antiga","No hi és","No ho sé"]},
+ {t:"Coneixeu el programa Robots en Acció?",o:["Hi participem","Sí, però no hi participem","N'he sentit parlar","No el conec"]}
+];
+const $=s=>document.querySelector(s);
+const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e};
+const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const ss={get(k){try{return sessionStorage.getItem(k)}catch(e){return null}},set(k,v){try{sessionStorage.setItem(k,v)}catch(e){}}};
+let pres=location.hash==="#presenta";
+let clau=ss.get("clau")||"";
+let uid=ls.get("uid");if(!uid){uid="p"+Math.random().toString(36).slice(2,10)+Date.now().toString(36);ls.set("uid",uid)}
+let state={q:0,obert:false};
+let mine={name:ls.get("nom")||"",centre:ls.get("centre")||"",answers:JSON.parse(ls.get("resp")||"{}")};
+let persones=[];
+let busy=false;
+
+function msg(t){const m=$("#msg");m.textContent="";if(t)m.appendChild(el("div","err",t))}
+async function get(params){const u=API+"?"+new URLSearchParams(params);const r=await fetch(u);return r.json()}
+async function post(body){const r=await fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)});return r.json()}
+function configured(){return API&&!API.startsWith("PASTE")}
+
+async function poll(){
+ if(!configured())return;
+ try{
+  if(pres&&clau){const d=await get({accio:"resultats",clau});
+   if(d.error==="clau"){msg("Clau incorrecta.");clau="";ss.set("clau","");}
+   else{msg("");state=d.estat;persones=d.persones}}
+  else{const d=await get({});msg("");state=d.estat}
+ }catch(e){msg("No hi ha connexió amb el servidor. Es tornarà a provar.")}
+ render();
+}
+function counts(q){const n=QS[q].o.length;const c=Array(n).fill(0);const who=Array.from({length:n},()=>[]);
+ persones.forEach(p=>{const a=p.respostes["q"+q];if(a!=null&&a<n){c[a]++;if(p.nom)who[a].push(p.nom+(p.centre?" ("+p.centre+")":""))}});return {c,who}}
+
+function render(){
+ if(document.activeElement&&document.activeElement.tagName==="INPUT")return;
+ const bar=$("#bar");bar.textContent="";
+ const app=$("#app");app.textContent="";
+ if(!configured()){app.appendChild(el("div","card","Falta configurar l'URL del servidor (variable API a index.html). Mira el README."));return}
+ if(pres){
+  const b=el("button","","Vista de participant");b.onclick=()=>{location.hash="";pres=false;render()};bar.appendChild(b);
+  if(!clau)return renderClau(app);
+  return renderPres(app)}
+ renderPart(app);
+}
+function renderClau(app){
+ const c=el("div","card");c.appendChild(el("strong","","Clau de la presentadora"));
+ const i=el("input","k");i.type="password";const b=el("button","pri","Entra");
+ b.onclick=()=>{clau=i.value;ss.set("clau",clau);poll()};
+ i.onkeydown=e=>{if(e.key==="Enter")b.click()};
+ const p=el("p","");p.append(i,b);c.appendChild(p);app.appendChild(c);
+}
+function renderPres(app){
+ const q=QS[state.q];const {c,who}=counts(state.q);const tot=c.reduce((a,b)=>a+b,0);
+ const card=el("div","card");
+ card.appendChild(el("div","eyebrow","Pregunta "+(state.q+1)+" de "+QS.length));
+ card.appendChild(el("h1","",q.t));
+ const st=el("div","status");
+ st.appendChild(el("span","pill "+(state.obert?"on":"off"),state.obert?"Votació oberta":"Votació tancada"));
+ st.appendChild(el("span","",tot+" respostes · "+persones.length+" persones al registre"));
+ card.appendChild(st);
+ const z=el("div","zones");
+ q.o.forEach((lab,i)=>{
+  const d=el("div","zone");d.style.background=COLORS[i%COLORS.length];
+  d.appendChild(el("div","lab",lab));d.appendChild(el("div","n",String(c[i])));
+  d.appendChild(el("div","pct",tot?Math.round(100*c[i]/tot)+" %":"—"));
+  if(who[i].length)d.appendChild(el("div","names",who[i].join(", ")));
+  const dots=el("div","dots");for(let k=0;k<c[i];k++)dots.appendChild(el("span","dot"));
+  d.appendChild(dots);z.appendChild(d)});
+ card.appendChild(z);
+ const ctl=el("div","bar");ctl.style.marginTop="16px";
+ const prev=el("button","","← Anterior");prev.disabled=state.q===0;prev.onclick=()=>setEstat(state.q-1,true);
+ const tog=el("button","pri",state.obert?"Tanca la votació":"Obre la votació");tog.onclick=()=>setEstat(state.q,!state.obert);
+ const next=el("button","",state.q===QS.length-1?"Última pregunta":"Següent →");next.disabled=state.q===QS.length-1;next.onclick=()=>setEstat(state.q+1,true);
+ ctl.append(prev,tog,next);card.appendChild(ctl);app.appendChild(card);
+ const reg=el("div","card");reg.style.marginTop="14px";
+ reg.appendChild(el("strong","","Registre de respostes"));
+ reg.appendChild(el("p","note","Les respostes es desen al full de càlcul vinculat (pestanyes Respostes i Resum). També les pots descarregar aquí."));
+ const rb=el("div","bar");
+ const e1=el("button","","Descarrega el registre (CSV)");e1.onclick=()=>csv(false);
+ const e2=el("button","","Descarrega el resum (CSV)");e2.onclick=()=>csv(true);
+ const e3=el("button","","Esborra totes les respostes");
+ e3.onclick=()=>{if(e3.dataset.sure!=="1"){e3.dataset.sure="1";e3.textContent="Segur? Torna a clicar per esborrar";setTimeout(()=>{e3.dataset.sure="";e3.textContent="Esborra totes les respostes"},4000);return}
+  post({accio:"esborra",clau}).then(poll).catch(()=>msg("No s'ha pogut esborrar."))};
+ rb.append(e1,e2,e3);reg.appendChild(rb);app.appendChild(reg);
+}
+async function setEstat(q,obert){state={q,obert};render();
+ try{const d=await post({accio:"estat",clau,q,obert});if(d.error)msg("No s'ha pogut canviar l'estat ("+d.error+").")}catch(e){msg("No s'ha pogut canviar l'estat.")}}
+function renderPart(app){
+ const card=el("div","card");const q=QS[state.q];
+ card.appendChild(el("div","eyebrow","Pregunta "+(state.q+1)+" de "+QS.length));
+ card.appendChild(el("h1","",q.t));
+ card.appendChild(el("p","hint",state.obert?"Tria la franja on et situes. Pots canviar la resposta mentre la votació sigui oberta.":"Votació tancada. Mira la pantalla i espera la propera pregunta."));
+ const cur=mine.answers["q"+state.q];
+ q.o.forEach((lab,i)=>{const b=el("button","opt"+(cur===i?" sel":""),lab);b.style.background=COLORS[i%COLORS.length];
+  b.disabled=!state.obert;b.onclick=()=>answer(i);card.appendChild(b)});
+ app.appendChild(card);
+ const id=el("div","card");id.style.marginTop="14px";
+ id.appendChild(el("strong","","Qui ets? (opcional)"));
+ id.appendChild(el("p","note","Si ho deixes en blanc, la resposta serà anònima. Amb el nom i el centre podrem preparar millor les sessions."));
+ const i1=el("input");i1.type="text";i1.maxLength=60;i1.value=mine.name;i1.placeholder="Nom";
+ const i2=el("input");i2.type="text";i2.maxLength=80;i2.value=mine.centre;i2.placeholder="Centre";i2.style.marginTop="8px";
+ let tm=null;const sv=()=>{clearTimeout(tm);tm=setTimeout(()=>{mine.name=i1.value.trim();mine.centre=i2.value.trim();ls.set("nom",mine.name);ls.set("centre",mine.centre);
+  post({accio:"identitat",id:uid,nom:mine.name,centre:mine.centre}).catch(()=>{})},800)};
+ i1.oninput=sv;i2.oninput=sv;id.append(i1,i2);app.appendChild(id);
+}
+async function answer(i){
+ mine.answers["q"+state.q]=i;ls.set("resp",JSON.stringify(mine.answers));render();
+ try{const d=await post({accio:"respon",id:uid,nom:mine.name,centre:mine.centre,q:state.q,opcio:i});
+  if(d.error==="tancat")msg("La votació s'ha tancat.");else if(d.error==="pregunta")msg("S'ha canviat de pregunta.");else msg("")}
+ catch(e){msg("No s'ha pogut enviar la resposta. Torna-ho a provar.")}
+}
+function cell(v){v=String(v==null?"":v);return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+function csv(summary){
+ const rows=[];
+ if(summary){rows.push(["Pregunta","Opció","Respostes"]);QS.forEach((q,qi)=>{const {c}=counts(qi);q.o.forEach((o,i)=>rows.push([q.t,o,c[i]]))})}
+ else{rows.push(["Nom","Centre","Actualitzat",...QS.map((q,i)=>(i+1)+". "+q.t)]);
+  persones.forEach(p=>rows.push([p.nom||"(anònim)",p.centre||"",p.actualitzat||"",...QS.map((q,i)=>{const a=p.respostes["q"+i];return a!=null?q.o[a]:""})]))}
+ const blob=new Blob(["﻿"+rows.map(r=>r.map(cell).join(";")).join("\n")],{type:"text/csv;charset=utf-8"});
+ const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=summary?"xtcd_resum.csv":"xtcd_registre.csv";document.body.appendChild(a);a.click();a.remove();
+}
+window.addEventListener("hashchange",()=>{pres=location.hash==="#presenta";render();poll()});
+render();poll();setInterval(poll,POLL_MS);
+</script>
+</body>
+</html>
