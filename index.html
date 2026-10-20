@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Terra, mar i aire digital</title>
 <style>
+/* COLORS I TEMA
+ Tots els colors són variables (--nom) definides aquí. Per canviar l'aspecte de la pàgina només cal tocar aquests valors:
+  --teal i --orange: colors corporatius (títols, botons principals).
+  --c0 ... --c4: els colors de les «franges» (opcions de resposta). Màxim 5 colors, per tant màxim 5 opcions per pregunta.
+  --onc: color del text damunt de les franges (fosc, perquè es llegeixi bé sobre colors clars).
+ El bloc @media (prefers-color-scheme:dark) fa servir una paleta fosca si el dispositiu té el mode fosc activat. */
 :root{--bg:#f6f9fa;--card:#fff;--ink:#1f2937;--mute:#6b7280;--teal:#1F6F8B;--orange:#E8871E;--light:#EEF4F7;--mid:#C9D6DC;
 --c0:#F2C230;--c1:#4C7DF0;--c2:#7A4BB5;--c3:#3AA655;--c4:#E8871E;--onc:#1f2937}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10181c;--card:#18232a;--ink:#e8eef1;--mute:#9aa8b0;--teal:#6FB1C6;--light:#1d2b33;--mid:#2f414b;--onc:#10181c}}
@@ -25,6 +31,9 @@ button:disabled{opacity:.5;cursor:default}
 .eyebrow{color:var(--orange);font-weight:700;font-size:.85rem;letter-spacing:.06em;text-transform:uppercase}
 h1{margin:4px 0 4px;font-size:clamp(1.4rem,4vw,2.4rem);color:var(--teal);line-height:1.15}
 .hint{color:var(--mute);margin:0 0 14px}
+/* VISTA DE PROJECCIÓ
+ .zones és una graella: cada opció de la pregunta és una «zona» (franja) de color. La graella s'adapta sola
+ a l'amplada de la pantalla (auto-fit): en un projector es veuen totes en fila i en un mòbil s'apilen. */
 .zones{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));margin-top:12px}
 .zone{border-radius:16px;padding:14px;color:var(--onc);min-height:220px;display:flex;flex-direction:column;gap:8px}
 .zone .lab{font-weight:700;font-size:clamp(1rem,2vw,1.35rem)}
@@ -35,6 +44,8 @@ h1{margin:4px 0 4px;font-size:clamp(1.4rem,4vw,2.4rem);color:var(--teal);line-he
 .names{font-size:.85rem;opacity:.9}
 @keyframes pop{from{transform:scale(0)}to{transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.dot{animation:none}}
+/* VISTA DE PARTICIPANT
+ .opt són els botons grans d'opció. .opt.sel marca la que el participant ha triat (vora fosca). */
 .opt{display:block;width:100%;text-align:left;margin:10px 0;padding:18px;font-size:1.1rem;font-weight:600;border-radius:14px;color:var(--onc);border:4px solid transparent}
 .opt.sel{border-color:var(--ink);box-shadow:0 0 0 3px var(--card) inset}
 .status{display:flex;flex-wrap:wrap;gap:12px;align-items:center;color:var(--mute);margin-top:10px}
@@ -47,12 +58,19 @@ input[type=text]{width:100%;font:inherit;padding:10px;border-radius:10px;border:
 .err{background:#fde8e8;color:#7a1f1f;padding:10px 14px;border-radius:10px;margin:10px 0}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .err{background:#3b1d1d;color:#f5c2c2}}
 .hidden{display:none!important}
+/* IMPRESSIÓ
+ En imprimir (o desar com a PDF) s'oculten els botons i la capçalera, perquè només quedi el resum. */
 @media print{.top,#bar,button{display:none!important}body{background:#fff}}
 input.k{max-width:260px;display:inline-block;margin-right:8px}
 textarea{width:100%;font:inherit;padding:10px;border-radius:10px;border:1px solid var(--mid);background:var(--card);color:var(--ink);resize:vertical}
 </style>
 </head>
 <body>
+<!-- ESTRUCTURA DE LA PÀGINA
+     La pàgina és gairebé buida a propòsit: el JavaScript omple tres contenidors i ho torna a dibuixar cada cop que canvia alguna cosa.
+      #bar : botons de la capçalera (canvi entre vista de projecció i de participant)
+      #msg : missatges d'error (sense connexió, clau incorrecta...)
+      #app : el contingut principal (pregunta, franges, formulari...) -->
 <div class="wrap">
   <div class="top">
     <div class="brand">xTCD Alt Penedès<small>Terra, mar i aire digital</small></div>
@@ -63,12 +81,42 @@ textarea{width:100%;font:inherit;padding:10px;border-radius:10px;border:1px soli
 </div>
 <script>
 "use strict";
+// COM FUNCIONA AQUEST FITXER (visió general)
+// Aquesta web és un joc de posicionament tipus «Terra, mar i aire»: es projecta una pregunta, cada persona tria una
+// opció (franja) des del seu dispositiu i la pantalla mostra en directe com es reparteix el grup.
+//
+// No hi ha servidor propi. Les peces són tres:
+//  1) Aquest index.html (alberga la pàgina; es pot publicar a GitHub Pages, gratis).
+//  2) Un full de càlcul de Google, que fa de registre de respostes.
+//  3) Un Google Apps Script (apps-script/Codi.gs) que fa de «porter»: rep les peticions d'aquesta pàgina i llegeix/escriu al full.
+//
+// Tres maneres d'obrir la mateixa pàgina (segons el que hi hagi després del # de l'adreça):
+//  (sense res)  → vista de PARTICIPANT: tria opció, comentari opcional, nom i centre opcionals.
+//  #presenta    → vista de PROJECCIÓ (cal la clau): franges amb recomptes en directe i controls de la sessió.
+//  #resum       → resum final ANÒNIM (només si la presentadora l'ha publicat).
+//
+// El flux és: el participant fa clic → es fa un POST a Apps Script → s'escriu al full →
+// la vista de projecció pregunta cada 2,5 s («polling») → i es redibuixen les franges.
 /* ====== CONFIGURACIÓ ====== */
 // Enganxa aquí l'URL de l'aplicació web d'Apps Script (acaba en /exec).
+// Enganxa aquí l'adreça de l'aplicació web d'Apps Script (acaba en /exec). És l'ÚNIC valor que has de canviar
+// en aquest fitxer per fer-la servir amb el teu propi full de càlcul. No és secret (és l'adreça pública de la «porta d'entrada»);
+// la clau de la presentadora és a Codi.gs i no surt mai d'allà.
 const API = "https://script.google.com/macros/s/AKfycbzUPQ_HHaM_A9LsaHVliPgRnoELcgree1A2O-xFKvstgJzN1gkzVHqQV_76HF8jgnrQ/exec";
+// Cada quants mil·lisegons es consulta el servidor. 2500 = 2,5 s. Més baix = més «en directe», però més peticions a Google.
 const POLL_MS = 2500;
 /* ========================== */
+// Colors de les franges, en ordre: l'opció 1 fa servir --c0, la 2 --c1, etc. (definits al CSS de dalt).
+// Si una pregunta té més de 5 opcions els colors es repeteixen, però convé no passar-se: no es veurien bé.
 const COLORS=["var(--c0)","var(--c1)","var(--c2)","var(--c3)","var(--c4)"];
+// BANC DE PREGUNTES (aquí s'edita el contingut del joc)
+// Cada element és una pregunta: t = text de la pregunta, o = llista d'opcions (cada opció és una franja).
+// Per canviar, afegir o treure preguntes:
+//  - Edita aquesta llista i la llista QS d'apps-script/Codi.gs. HAN DE SER IDÈNTIQUES, lletra per lletra:
+//    el servidor compara el text de cada opció per validar i comptar les respostes.
+//  - Entre 2 i 5 opcions per pregunta (hi ha 5 colors).
+//  - Si canvies el nombre de preguntes, també cal actualitzar TITOLS a Codi.gs i tornar a executar la funció configura().
+//  - Convé mantenir preguntes.md al dia: és només documentació, la pàgina no el llegeix.
 const QS=[
  {t:"Quina és la tipologia del vostre centre?",o:["Primària","Secundària","Primària i secundària"]},
  {t:"Quants cursos fa que sou coordinadors/es digitals?",o:["Aquest és el primer","2 o 3 anys","De 4 a 6 anys","Més de 6 anys"]},
@@ -83,29 +131,57 @@ const QS=[
  {t:"L'EDC actualitzada és a l'apartat «Documents de centre» del Nodes?",o:["Sí, actualitzada","Sí, però és una versió antiga","No hi és","No ho sé"]},
  {t:"Coneixeu el programa Robots en Acció?",o:["Sí, hi participem","Sí, però no hi participem","N'he sentit parlar","No el conec"]}
 ];
+// Funcions d'ajuda curtes. $(selector) troba un element; el(etiqueta,classe,text) en crea un. Fem servir textContent (no innerHTML) perquè el text dels participants mai s'executi com a codi.
 const $=s=>document.querySelector(s);
 const el=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e};
+// Emmagatzematge del navegador (localStorage = es conserva en tancar; sessionStorage = només durant la sessió).
+// Les envoltem amb try/catch perquè en alguns navegadors (mode privat) poden fallar, i la pàgina ha de continuar funcionant.
 const ls={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 const ss={get(k){try{return sessionStorage.getItem(k)}catch(e){return null}},set(k,v){try{sessionStorage.setItem(k,v)}catch(e){}}};
+// ESTAT DE LA PÀGINA (variables que canvien mentre s'usa)
+//  pres       : és la vista de projecció? (adreça acabada en #presenta)
+//  resumMode  : és la vista pública del resum? (adreça acabada en #resum)
+//  showResum  : la presentadora està mirant el resum final dins la vista de projecció?
+//  publicResum: dades del resum públic descarregades del servidor
 let pres=location.hash==="#presenta";
 let resumMode=location.hash==="#resum";
 let showResum=false;
 let publicResum=null;
+// La clau de la presentadora, escrita a la pantalla d'entrada. Es guarda només a sessionStorage (desapareix en tancar la pestanya).
 let clau=ss.get("clau")||"";
+// Identificador anònim d'aquest dispositiu: un text aleatori que es crea la primera vegada i es guarda al navegador.
+// Serveix perquè, si algú canvia de resposta, s'actualitzi la seva fila al full i no se'n creï una de nova.
+// No és cap dada personal: el nom i el centre són opcionals i es demanen a part.
 let uid=ls.get("uid");if(!uid){uid="p"+Math.random().toString(36).slice(2,10)+Date.now().toString(36);ls.set("uid",uid)}
+// Estat de la sessió que ve del servidor: q = número de pregunta activa (comença a 0), obert = admet respostes?, resum = el resum és públic?
 let state={q:0,obert:false};
+// El que ha respost aquest participant (respostes, comentaris, nom i centre). Es guarda també al navegador perquè, si recarrega la pàgina, no ho perdi.
 let mine={name:ls.get("nom")||"",centre:ls.get("centre")||"",answers:JSON.parse(ls.get("resp")||"{}"),comments:JSON.parse(ls.get("com")||"{}")};
+// Només la vista de projecció la fa servir: llista de totes les persones i les seves respostes (rebuda del servidor amb la clau).
 let persones=[];
+// (Variable que no s'utilitza actualment; es pot esborrar sense conseqüències.)
 let busy=false;
 
+// Mostra un missatge d'error a #msg. msg('') l'esborra.
 function msg(t){const m=$("#msg");m.textContent="";if(t)m.appendChild(el("div","err",t))}
+// Comunicació amb el servidor (1/2): LLEGIR. Fa una petició GET a Apps Script amb paràmetres a l'adreça (p. ex. ?accio=resum).
 async function get(params){const u=API+"?"+new URLSearchParams(params);const r=await fetch(u);return r.json()}
+// Comunicació amb el servidor (2/2): ESCRIURE. Envia un objecte JSON per POST.
+// Detall tècnic important: s'envia com a «text/plain» (no application/json) a propòsit. Així el navegador no fa la
+// comprovació prèvia CORS que Apps Script no sap contestar. Si el canvies a application/json, deixarà de funcionar.
 async function post(body){const r=await fetch(API,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)});return r.json()}
+// Comprova que s'ha substituït l'adreça de l'API (si encara posa PASTE..., mostra un avís en lloc de la pàgina).
 function configured(){return API&&!API.startsWith("PASTE")}
 
+// «POLLING»: cada POLL_MS la pàgina pregunta al servidor com està la sessió i redibuixa.
+//  - Vista de resum públic: demana només el resum.
+//  - Vista de projecció (amb clau): demana els resultats complets (qui ha respost què) i l'estat.
+//  - Participant: només demana l'estat (quina pregunta toca i si la votació és oberta).
+// Així tothom veu els canvis de la presentadora en 2-3 segons, sense necessitat de servidor en temps real.
 async function poll(){
  if(!configured())return;
  if(resumMode){try{const d=await get({accio:"resum"});publicResum=d;msg("")}catch(e){msg("No hi ha connexió amb el servidor.")}render();return}
+ // Vistes de projecció i de participant. Si falla la connexió, es mostra un avís i es torna a provar al cicle següent.
  try{
   if(pres&&clau){const d=await get({accio:"resultats",clau});
    if(d.error==="clau"){msg("Clau incorrecta.");clau="";ss.set("clau","");}
@@ -114,9 +190,13 @@ async function poll(){
  }catch(e){msg("No hi ha connexió amb el servidor. Es tornarà a provar.")}
  render();
 }
+// Calcula, per a la pregunta q, quantes persones han triat cada opció (c) i els noms de qui ho ha fet (who, només si han posat nom).
+// Retorna c = [recompte opció 1, recompte opció 2, ...].
 function counts(q){const n=QS[q].o.length;const c=Array(n).fill(0);const who=Array.from({length:n},()=>[]);
  persones.forEach(p=>{const a=p.respostes["q"+q];if(a!=null&&a<n){c[a]++;if(p.nom)who[a].push(p.nom+(p.centre?" ("+p.centre+")":""))}});return {c,who}}
 
+// Redibuixa la pàgina sencera segons la vista activa. És el punt central: totes les funcions render* construeixen elements i els pengen de #app.
+// Si l'usuari està escrivint en un camp (INPUT/TEXTAREA) NO es redibuixa, per no esborrar-li el que escriu ni fer-li perdre el cursor.
 function render(){
  if(document.activeElement&&/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName))return;
  const bar=$("#bar");bar.textContent="";
@@ -129,6 +209,7 @@ function render(){
   return renderPres(app)}
  renderPart(app);
 }
+// Pantalla d'entrada de la presentadora: demana la clau. No es comprova aquí: la comprova el servidor, que és l'únic que la sap.
 function renderClau(app){
  const c=el("div","card");c.appendChild(el("strong","","Clau de la presentadora"));
  const i=el("input","k");i.type="password";const b=el("button","pri","Entra");
@@ -136,6 +217,9 @@ function renderClau(app){
  i.onkeydown=e=>{if(e.key==="Enter")b.click()};
  const p=el("p","");p.append(i,b);c.appendChild(p);app.appendChild(c);
 }
+// VISTA DE PROJECCIÓ: pregunta, franges amb el recompte i els punts, i els controls.
+// Els punts (.dot) fan la funció visual de «persones que s'han posicionat»: n'hi ha un per resposta.
+// Per decisió de privadesa NO es mostren els comentaris dels participants a la pantalla (només van al full i al CSV).
 function renderPres(app){
  if(showResum)return renderResumPres(app);
  const q=QS[state.q];const {c,who}=counts(state.q);const tot=c.reduce((a,b)=>a+b,0);
@@ -155,14 +239,17 @@ function renderPres(app){
   const dots=el("div","dots");for(let k=0;k<c[i];k++)dots.appendChild(el("span","dot"));
   d.appendChild(dots);z.appendChild(d)});
  card.appendChild(z);
+ // Controls de la sessió: pregunta anterior / obrir-tancar la votació / pregunta següent. Només la presentadora els veu.
  const ctl=el("div","bar");ctl.style.marginTop="16px";
  const prev=el("button","","← Anterior");prev.disabled=state.q===0;prev.onclick=()=>setEstat(state.q-1,true);
  const tog=el("button","pri",state.obert?"Tanca la votació":"Obre la votació");tog.onclick=()=>setEstat(state.q,!state.obert);
  const next=el("button","",state.q===QS.length-1?"Última pregunta":"Següent →");next.disabled=state.q===QS.length-1;next.onclick=()=>setEstat(state.q+1,true);
  ctl.append(prev,tog,next);card.appendChild(ctl);
+ // Selector directe de pregunta (botons 1 a 12): permet saltar a qualsevol pregunta.
  const nav=el("div","bar");nav.style.marginTop="10px";nav.appendChild(el("span","note","Ves a la pregunta:"));
  QS.forEach((_,i)=>{const nb=el("button",i===state.q?"pri":"",String(i+1));nb.style.minWidth="42px";nb.setAttribute("aria-label","Pregunta "+(i+1));nb.onclick=()=>{if(i!==state.q)setEstat(i,true)};nav.appendChild(nb)});
  card.appendChild(nav);app.appendChild(card);
+ // Registre: descàrregues en CSV, resum final i botó per esborrar totes les respostes (demana confirmar amb un segon clic).
  const reg=el("div","card");reg.style.marginTop="14px";
  reg.appendChild(el("strong","","Registre de respostes"));
  reg.appendChild(el("p","note","Les respostes es desen al full de càlcul vinculat (pestanyes Respostes i Resum). També les pots descarregar aquí."));
@@ -175,8 +262,12 @@ function renderPres(app){
  const e4=el("button","pri","Resum final");e4.onclick=()=>{showResum=true;render()};
  rb.append(e4,e1,e2,e3);reg.appendChild(rb);app.appendChild(reg);
 }
+// Canvia la pregunta activa o obre/tanca la votació. Primer s'actualitza la pantalla a l'instant («optimistic UI») i després s'avisa el servidor.
+// El servidor només ho accepta si la clau és correcta.
 async function setEstat(q,obert){state=Object.assign({},state,{q,obert});render();
  try{const d=await post({accio:"estat",clau,q,obert});if(d.error)msg("No s'ha pogut canviar l'estat ("+d.error+").")}catch(e){msg("No s'ha pogut canviar l'estat.")}}
+// Dibuixa el resum final: per a cada pregunta, una barra per opció amb el recompte i el percentatge.
+// El mateix dibuix serveix per a la vista de la presentadora i per a l'enllaç públic. No inclou mai noms, centres ni comentaris.
 function summaryCard(app,counts,n){
  const card=el("div","card");
  card.appendChild(el("div","eyebrow","xTCD Alt Penedès"));
@@ -198,11 +289,13 @@ function summaryCard(app,counts,n){
   card.appendChild(blk)});
  app.appendChild(card);
 }
+// Vista pública (#resum): només es veu si la presentadora ha publicat el resum.
 function renderResumPublic(app){
  if(!publicResum){app.appendChild(el("div","card","Carregant el resum…"));return}
  if(publicResum.error){app.appendChild(el("div","card","El resum encara no s'ha publicat. Torna-ho a provar més tard."));return}
  summaryCard(app,publicResum.counts,publicResum.persones);
 }
+// Resum final dins la vista de projecció, amb el botó de publicar/ocultar l'enllaç públic, copiar l'enllaç i imprimir/desar en PDF.
 function renderResumPres(app){
  const bar=el("div","bar");bar.style.marginBottom="12px";
  const back=el("button","","← Torna a les preguntes");back.onclick=()=>{showResum=false;render()};
@@ -219,6 +312,8 @@ function renderResumPres(app){
  else app.appendChild(el("p","note","El resum només és visible per a tu fins que el publiquis."));
  summaryCard(app,QS.map((_,i)=>counts(i).c),persones.length);
 }
+// VISTA DE PARTICIPANT: la pregunta activa, els botons d'opció, un comentari opcional i el formulari opcional de nom i centre.
+// Els botons estan desactivats mentre la votació és tancada.
 function renderPart(app){
  const card=el("div","card");const q=QS[state.q];
  card.appendChild(el("div","eyebrow","Pregunta "+(state.q+1)+" de "+QS.length));
@@ -227,6 +322,7 @@ function renderPart(app){
  const cur=mine.answers["q"+state.q];
  q.o.forEach((lab,i)=>{const b=el("button","opt"+(cur===i?" sel":""),lab);b.style.background=COLORS[i%COLORS.length];
   b.disabled=!state.obert;b.onclick=()=>answer(i);card.appendChild(b)});
+ // Comentari opcional per pregunta. Es desa sol 1 s després que la persona deixi d'escriure («debounce»: així no s'envia una petició per cada lletra).
  const lc=el("label","","Vols afegir un comentari? (opcional)");
  const ta=el("textarea");ta.maxLength=500;ta.rows=3;ta.value=mine.comments["q"+state.q]||"";ta.placeholder="Qualsevol cosa que creguis convenient sobre aquesta pregunta";
  let tc=null;const qn=state.q;
@@ -234,6 +330,7 @@ function renderPart(app){
   post({accio:"comentari",id:uid,nom:mine.name,centre:mine.centre,q:qn,text:ta.value.trim()}).then(d=>{if(d.error==="pregunta")msg("No s'ha pogut desar el comentari: s'ha canviat de pregunta.")}).catch(()=>msg("No s'ha pogut desar el comentari."))},1000)};
  card.append(lc,ta);
  app.appendChild(card);
+ // Nom i centre, opcionals. Si es deixen en blanc la resposta és anònima. També es desen 0,8 s després de deixar d'escriure.
  const id=el("div","card");id.style.marginTop="14px";
  id.appendChild(el("strong","","Qui ets? (opcional)"));
  id.appendChild(el("p","note","Si ho deixes en blanc, la resposta serà anònima. Amb el nom i el centre podrem preparar millor les sessions."));
@@ -243,13 +340,18 @@ function renderPart(app){
   post({accio:"identitat",id:uid,nom:mine.name,centre:mine.centre}).catch(()=>{})},800)};
  i1.oninput=sv;i2.oninput=sv;id.append(i1,i2);app.appendChild(id);
 }
+// Un participant tria una opció: es guarda al navegador, es pinta de seguida i s'envia al servidor.
+// El servidor la rebutja si la votació és tancada o si ja s'ha canviat de pregunta (i la pàgina n'avisa).
 async function answer(i){
  mine.answers["q"+state.q]=i;ls.set("resp",JSON.stringify(mine.answers));render();
  try{const d=await post({accio:"respon",id:uid,nom:mine.name,centre:mine.centre,q:state.q,opcio:i});
   if(d.error==="tancat")msg("La votació s'ha tancat.");else if(d.error==="pregunta")msg("S'ha canviat de pregunta.");else msg("")}
  catch(e){msg("No s'ha pogut enviar la resposta. Torna-ho a provar.")}
 }
+// Prepara un valor per a un CSV: si té punt i coma, cometes o salts de línia, el posa entre cometes (format que entén Excel).
 function cell(v){v=String(v==null?"":v);return /[";\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}
+// Genera i descarrega un CSV al navegador. summary=true: recomptes per pregunta/opció. summary=false: una fila per persona amb respostes i comentaris.
+// El separador és punt i coma i s'afegeix un BOM (caràcter invisible) perquè Excel en català mostri bé els accents.
 function csv(summary){
  const rows=[];
  if(summary){rows.push(["Pregunta","Opció","Respostes"]);QS.forEach((q,qi)=>{const {c}=counts(qi);q.o.forEach((o,i)=>rows.push([q.t,o,c[i]]))})}
@@ -258,7 +360,9 @@ function csv(summary){
  const blob=new Blob(["﻿"+rows.map(r=>r.map(cell).join(";")).join("\n")],{type:"text/csv;charset=utf-8"});
  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=summary?"xtcd_resum.csv":"xtcd_registre.csv";document.body.appendChild(a);a.click();a.remove();
 }
+// Si canvia la part de l'adreça després del # (#presenta, #resum o res), es recalcula la vista sense recarregar la pàgina.
 window.addEventListener("hashchange",()=>{pres=location.hash==="#presenta";resumMode=location.hash==="#resum";publicResum=null;render();poll()});
+// ARRENCADA: es dibuixa la pàgina, es fa la primera consulta al servidor i es programa la repetició cada POLL_MS.
 render();poll();setInterval(poll,POLL_MS);
 </script>
 </body>

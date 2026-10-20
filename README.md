@@ -38,3 +38,69 @@ Si canvies el codi del script, cal fer `Desplega > Gestiona els desplegaments > 
 
 ## Autoria
 Paula Pacho, Mentoria 4.0 de l'Alt Penedès. Pàgina generada amb Claude.
+
+---
+
+# Guia per a docents: entendre-ho i adaptar-ho
+
+Aquesta part és per a qui vulgui agafar la proposta, entendre com està feta i personalitzar-la per a la seva aula, claustre o formació.
+El codi està comentat en català, fitxer per fitxer, perquè es pugui llegir com un petit tutorial.
+
+## Com funciona per dins
+
+```
+ Participants (mòbil)          Presentadora (projector)
+        |                              |
+        |  index.html a GitHub Pages   |
+        +--------------+---------------+
+                       |   peticions (GET / POST)
+                       v
+        Google Apps Script  (apps-script/Codi.gs)   <- el «porter»: valida i escriu
+                       |
+                       v
+        Full de càlcul de Google  <- el registre: Respostes · Estat · Resum
+```
+
+- **No hi ha servidor propi.** La pàgina és un sol fitxer HTML; Google fa de base de dades (el full) i de servidor (l'Apps Script).
+- **No cal que els participants tinguin cap compte**: només obren l'enllaç.
+- **Quasi en directe:** la pàgina pregunta al servidor cada 2,5 segons («polling») i es redibuixa.
+- **Tres vistes amb la mateixa pàgina**, segons el final de l'adreça:
+  - sense res: participant;
+  - `#presenta`: projecció i controls (cal la clau);
+  - `#resum`: resum anònim públic (només si la presentadora el publica).
+
+## Què cal canviar per fer-ho teu
+
+| Vull... | On ho faig |
+|---|---|
+| Canviar, afegir o treure preguntes i opcions | Llista `QS` d'`index.html` **i** llista `QS` de `Codi.gs` (idèntiques, lletra per lletra), `TITOLS` de `Codi.gs` i després executar `configura()`. Actualitza també `preguntes.md` |
+| Fer servir el meu propi full de càlcul | Crear-lo, enganxar-hi `Codi.gs`, publicar-lo i posar l'adreça `/exec` a la variable `API` d'`index.html` |
+| Triar la meva clau de presentadora | Constant `CLAU` de `Codi.gs` (a l'editor d'Apps Script, no al repositori públic) |
+| Canviar colors i aparença | Variables `--teal`, `--orange`, `--c0`…`--c4` al començament del CSS d'`index.html` |
+| Canviar títols i textos de la interfície | Textos entre cometes a `index.html` (títol, botons, ajudes) |
+| Fer-ho més o menys «en directe» | Constant `POLL_MS` d'`index.html` (2500 = 2,5 s) |
+| Que no es demani nom ni centre | Esborrar el bloc «Nom i centre» de la funció `renderPart` d'`index.html` |
+
+**Regles que convé recordar:**
+- Entre 2 i 5 opcions per pregunta (hi ha 5 colors de franja).
+- El text de cada opció ha de ser **exactament el mateix** a `index.html` i a `Codi.gs`: el servidor valida i compta per coincidència de text.
+- Cada cop que canviïs `Codi.gs` cal tornar a desplegar: `Desplega > Gestiona els desplegaments > Edita > Nova versió`.
+- Executar `configura()` buida les respostes. Fes-ho abans de la sessió, no després.
+
+## Idees per adaptar-ho
+
+- **Diagnosi inicial d'una assignatura o d'un projecte:** «Quant coneixes X?» amb opcions de menys a més.
+- **Detecció de coneixements previs:** una pregunta per concepte clau, i el resum final serveix per planificar la propera sessió.
+- **Debat de postura:** preguntes d'acord / en desacord / dubto, i fer parlar els qui es posicionen en minoria.
+- **Revisió final:** repetir les mateixes preguntes al final i comparar amb el resum del principi.
+- **Formació entre iguals:** deixar que els qui han triat «ho domino» expliquin als qui han triat «no ho conec».
+
+## Per aprendre'n més
+
+Si vols fer servir aquest projecte a classe de tecnologia o programació, hi ha conceptes reals per treballar:
+
+- **Client i servidor**: què fa la pàgina i què fa l'Apps Script.
+- **Dades en un full de càlcul** com a base de dades senzilla (taules, fórmules `COUNTIF`).
+- **Peticions HTTP** (GET per llegir, POST per escriure) i dades en format JSON.
+- **Privadesa i seguretat bàsica**: per què la clau és al servidor, per què es neteja el text rebut, què s'anonimitza al resum.
+- **Disseny adaptable**: la mateixa pàgina funciona al projector i al mòbil (CSS `grid` i `clamp`).
